@@ -10,4 +10,4 @@ release: get
 	GOOS=darwin GOARCH=amd64 go build -o release/compose-repo_darwin_amd64 .
 	GOOS=linux GOARCH=amd64 go build -o release/compose-repo_linux_amd64 .
 	GOOS=linux GOARCH=386 go build -o release/compose-repo_linux_386 .
-	gzip release/*
+	gzip -f release/*
