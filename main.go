@@ -13,7 +13,7 @@ import (
 )
 
 const (
-	ComposerRepo  = ".composer-repo"
+	ComposerRepo  = ".compose-repo"
 	Manifest      = "manifest.json"
 	ComposeFile   = "docker-compose.yml"
 	defaultBranch = "master"
@@ -107,6 +107,7 @@ func main() {
 
 func statusCmd(c *cli.Context) {
 	// TODO: show git status with appropriate format from all repos at once
+	// TODO: check if dir is not in manifest
 }
 
 func initCmd(c *cli.Context) {
@@ -123,6 +124,8 @@ func initCmd(c *cli.Context) {
 }
 
 func syncCmd(c *cli.Context) {
+	fetch(ComposerRepo)
+
 	f, err := os.Open(filepath.Join(ComposerRepo, Manifest))
 
 	if err != nil {
