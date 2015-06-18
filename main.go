@@ -1,12 +1,10 @@
 package main
 
 import (
-	"bytes"
 	"encoding/json"
 	"io/ioutil"
 	"log"
 	"os"
-	"os/exec"
 	"path/filepath"
 
 	"github.com/codegangsta/cli"
@@ -20,96 +18,6 @@ const (
 	defaultRemote = "origin/master"
 )
 
-type Repo struct {
-	Path string `json:"path"`
-	URL  string `json:"url"`
-}
-
-func (r Repo) Get() error {
-	if r.exists() {
-		fetch(r.Path)
-	} else {
-		clone(r.URL, r.Path)
-	}
-	return nil
-}
-
-func (r Repo) Status() error {
-	return GitInDir(r.Path, "status", "-sb").Run()
-}
-
-func (r Repo) exists() bool {
-	f, err := os.Open(r.Path)
-	if err != nil {
-		return false
-	}
-	defer f.Close()
-
-	_, err = f.Stat()
-	if err != nil {
-		return false
-	}
-
-	return true
-}
-
-func Git(params ...string) *exec.Cmd {
-	cmd := exec.Command("git", params...)
-	cmd.Stdout = os.Stdout
-	cmd.Stdin = os.Stdin
-	cmd.Stderr = os.Stderr
-	return cmd
-}
-
-func GitInDir(dir string, params ...string) *exec.Cmd {
-	cmd := Git(params...)
-	cmd.Dir = dir
-	return cmd
-}
-
-func clone(src, dst string) {
-	if err := Git("clone", src, dst).Run(); err != nil {
-		log.Fatal(err)
-	}
-}
-
-func fetch(dir string) {
-	if err := GitInDir(dir, "fetch", "origin").Run(); err != nil {
-		log.Fatal(err)
-	}
-
-	var b bytes.Buffer
-
-	cmd := GitInDir(dir, "rev-parse", "--abbrev-ref", "HEAD")
-	cmd.Stdout = &b
-	err := cmd.Run()
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	br := b.Bytes()
-	curBranch := string(bytes.TrimSpace(br))
-
-	if curBranch != defaultBranch {
-		log.Printf("found that current branch is %q, switching to %q", curBranch, defaultBranch)
-		if err := GitInDir(dir, "checkout", defaultBranch).Run(); err != nil {
-			log.Fatal(err)
-		}
-	}
-
-	args := []string{"reset", "--hard", defaultRemote}
-	if err := GitInDir(dir, args...).Run(); err != nil {
-		log.Fatal(err)
-	}
-
-	if curBranch != defaultBranch {
-		log.Printf("switch back to %q branch after reseting %q to %q", curBranch, defaultBranch, defaultRemote)
-		if err := GitInDir(dir, "checkout", curBranch).Run(); err != nil {
-			log.Fatal(err)
-		}
-	}
-}
-
 func unmarshalRepos() []Repo {
 	f, err := os.Open(filepath.Join(ComposerRepo, Manifest))
 
@@ -119,6 +27,7 @@ func unmarshalRepos() []Repo {
 	defer f.Close()
 
 	data, _ := ioutil.ReadAll(f)
+
 	var repos []Repo
 
 	if err := json.Unmarshal(data, &repos); err != nil {
@@ -152,6 +61,16 @@ func main() {
 			Usage:       "syncronize repos from manifest.json",
 			Description: "",
 			Action:      syncCmd,
+			Flags: []cli.Flag{
+				cli.BoolFlag{
+					Name:  "hard,r",
+					Usage: "use `git reset --hard` to update",
+				},
+				cli.BoolFlag{
+					Name:  "prune,p",
+					Usage: "prune all the remotes that are updated",
+				},
+			},
 		},
 		{
 			Name:        "status",
