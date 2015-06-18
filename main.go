@@ -34,6 +34,10 @@ func (r Repo) Get() error {
 	return nil
 }
 
+func (r Repo) Status() error {
+	return GitInDir(r.Path, "status", "-sb").Run()
+}
+
 func (r Repo) exists() bool {
 	f, err := os.Open(r.Path)
 	if err != nil {
@@ -49,8 +53,6 @@ func (r Repo) exists() bool {
 	return true
 }
 
-var repos []Repo
-
 func Git(params ...string) *exec.Cmd {
 	cmd := exec.Command("git", params...)
 	cmd.Stdout = os.Stdout
@@ -63,86 +65,6 @@ func GitInDir(dir string, params ...string) *exec.Cmd {
 	cmd := Git(params...)
 	cmd.Dir = dir
 	return cmd
-}
-
-func main() {
-	log.SetFlags(0)
-	log.SetPrefix("===> ")
-	app := cli.NewApp()
-	app.Name = "composer-repo"
-	app.Usage = "sync multiple git repos"
-	app.Version = "0.0.1"
-	app.Commands = []cli.Command{
-		{
-			Name:        "init",
-			Aliases:     []string{"i"},
-			Usage:       "initialize repo with manifest.json and docker-compose.yml",
-			Description: "",
-			Flags: []cli.Flag{
-				cli.StringFlag{
-					Name:  "repo,r",
-					Usage: "path to manifest repo",
-				},
-			},
-			Action: initCmd,
-		},
-		{
-			Name:        "sync",
-			Aliases:     []string{"s"},
-			Usage:       "syncronize repos from manifest.json",
-			Description: "",
-			Action:      syncCmd,
-		},
-		{
-			Name:        "status",
-			Aliases:     []string{"st"},
-			Usage:       "show status across all repos",
-			Description: "",
-			Action:      statusCmd,
-		},
-	}
-
-	app.Run(os.Args)
-}
-
-func statusCmd(c *cli.Context) {
-	// TODO: show git status with appropriate format from all repos at once
-	// TODO: check if dir is not in manifest
-}
-
-func initCmd(c *cli.Context) {
-	repoURL := c.String("repo")
-	if repoURL == "" {
-		log.Fatal("please provide --repo, -r param")
-	}
-
-	clone(repoURL, ComposerRepo)
-
-	if err := os.Symlink(filepath.Join(ComposerRepo, ComposeFile), ComposeFile); err != nil {
-		log.Fatal(err)
-	}
-}
-
-func syncCmd(c *cli.Context) {
-	fetch(ComposerRepo)
-
-	f, err := os.Open(filepath.Join(ComposerRepo, Manifest))
-
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer f.Close()
-
-	data, _ := ioutil.ReadAll(f)
-
-	if err := json.Unmarshal(data, &repos); err != nil {
-		log.Fatal(err)
-	}
-
-	for i, rep := range repos {
-		log.Printf("syncing %s (%d/%d)\n", rep.Path, i+1, len(repos))
-		rep.Get()
-	}
 }
 
 func clone(src, dst string) {
@@ -186,4 +108,59 @@ func fetch(dir string) {
 			log.Fatal(err)
 		}
 	}
+}
+
+func unmarshalRepos() []Repo {
+	f, err := os.Open(filepath.Join(ComposerRepo, Manifest))
+
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer f.Close()
+
+	data, _ := ioutil.ReadAll(f)
+	var repos []Repo
+
+	if err := json.Unmarshal(data, &repos); err != nil {
+		log.Fatal(err)
+	}
+	return repos
+}
+
+func main() {
+	log.SetFlags(0)
+	log.SetPrefix("===> ")
+	app := cli.NewApp()
+	app.Name = "composer-repo"
+	app.Usage = "sync multiple git repos"
+	app.Version = "0.0.1"
+	app.Commands = []cli.Command{
+		{
+			Name:        "init",
+			Usage:       "initialize repo with manifest.json and docker-compose.yml",
+			Description: "",
+			Flags: []cli.Flag{
+				cli.StringFlag{
+					Name:  "repo,r",
+					Usage: "path to manifest repo",
+				},
+			},
+			Action: initCmd,
+		},
+		{
+			Name:        "sync",
+			Usage:       "syncronize repos from manifest.json",
+			Description: "",
+			Action:      syncCmd,
+		},
+		{
+			Name:        "status",
+			Aliases:     []string{"st"},
+			Usage:       "show status across all repos",
+			Description: "",
+			Action:      statusCmd,
+		},
+	}
+
+	app.Run(os.Args)
 }
